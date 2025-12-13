@@ -2,86 +2,102 @@ using UnityEngine;
 
 public class PlayerControler : MonoBehaviour
 {
-    [SerializeField]
-    private float speed = 5f;
+    [Header("Movement")]
+    [SerializeField] private float speed = 5f;
+    [SerializeField] private float jumpForce = 8f;
 
-    [SerializeField]
-    private float jumpForce = 10f;   // ← ESTO saldrá en el Inspector
+    [Header("Ground Check")]
+    [SerializeField] private Transform lFoot;
+    [SerializeField] private Transform rFoot;
+    [SerializeField] private float rayLength = 0.15f;
+    [SerializeField] private LayerMask groundLayer;
+    [SerializeField] private bool isGrounded;
 
     private int direction = 1;
     private int idSpeed;
 
-    private Rigidbody2D m_rigidbody2D;
-    private GatherInput m_gatherinput;
-    private Transform m_transform;
-    private Animator m_animator;
+    private Rigidbody2D rb;
+    private GatherInput input;
+    private Animator animator;
+    private Transform tr;
 
     private void Awake()
     {
-        m_gatherinput = GetComponent<GatherInput>();
-        m_transform = GetComponent<Transform>();
-        m_rigidbody2D = GetComponent<Rigidbody2D>();
-        m_animator = GetComponent<Animator>();
+        input = GetComponent<GatherInput>();
+        rb = GetComponent<Rigidbody2D>();
+        animator = GetComponent<Animator>();
+        tr = transform;
 
-        if (m_animator != null)
-        {
+        if (animator != null)
             idSpeed = Animator.StringToHash("Speed");
-        }
-    }
-
-    private void Update()
-    {
-        SetAnimatorValues();
     }
 
     private void FixedUpdate()
     {
+        CheckGround();
         Move();
         Jump();
     }
 
+    private void Update()
+    {
+        UpdateAnimator();
+    }
+
+    // ================= MOVEMENT =================
     private void Move()
     {
-        if (m_rigidbody2D == null || m_gatherinput == null) return;
+        if (rb == null || input == null) return;
 
         Flip();
 
-        Vector2 vel = m_rigidbody2D.linearVelocity;    // <- velocity, no linearVelocity
-        vel.x = speed * m_gatherinput.ValueX;
-        m_rigidbody2D.linearVelocity = vel;
-    }
-
-    private void SetAnimatorValues()
-    {
-        if (m_animator == null || m_rigidbody2D == null) return;
-
-        // velocity.x, no linearVelocityX
-        m_animator.SetFloat(idSpeed, Mathf.Abs(m_rigidbody2D.linearVelocity.x));
+        Vector2 vel = rb.linearVelocity;
+        vel.x = input.ValueX * speed;
+        rb.linearVelocity = vel;
     }
 
     private void Flip()
     {
-        if (m_gatherinput == null) return;
-
-        if (m_gatherinput.ValueX * direction < 0)
+        if (input.ValueX * direction < 0)
         {
-            m_transform.localScale = new Vector3(-m_transform.localScale.x, m_transform.localScale.y, m_transform.localScale.z);
+            tr.localScale = new Vector3(
+                -tr.localScale.x,
+                tr.localScale.y,
+                tr.localScale.z
+            );
             direction *= -1;
         }
     }
 
+    // ================= JUMP =================
     private void Jump()
     {
-        // OJO: esto asume que en tu GatherInput tienes una bandera IsJumping
-        if (m_gatherinput == null || m_rigidbody2D == null) return;
-
-        if (m_gatherinput.IsJumping)
+        if (input.JumpPressed && isGrounded)
         {
-            Vector2 vel = m_rigidbody2D.linearVelocity;
-            vel.y = jumpForce;          // ← aquí usamos jumpForce
-            m_rigidbody2D.linearVelocity = vel;
-
-            m_gatherinput.IsJumping = false;   // consumimos el salto
+            rb.AddForce(Vector2.up * jumpForce, ForceMode2D.Impulse);
         }
+    }
+
+    // ================= GROUND CHECK =================
+    private void CheckGround()
+    {
+        if (lFoot == null || rFoot == null) return;
+
+        RaycastHit2D leftRay = Physics2D.Raycast(lFoot.position, Vector2.down, rayLength, groundLayer);
+        RaycastHit2D rightRay = Physics2D.Raycast(rFoot.position, Vector2.down, rayLength, groundLayer);
+
+        isGrounded = leftRay.collider != null || rightRay.collider != null;
+
+        // Dibujar rayos para depuración
+        Debug.DrawRay(lFoot.position, Vector2.down * rayLength, Color.red);
+        Debug.DrawRay(rFoot.position, Vector2.down * rayLength, Color.blue);
+    }
+
+    // ================= ANIMATOR =================
+    private void UpdateAnimator()
+    {
+        if (animator == null || rb == null) return;
+
+        animator.SetFloat(idSpeed, Mathf.Abs(rb.linearVelocity.x));
     }
 }
