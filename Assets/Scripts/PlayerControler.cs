@@ -13,6 +13,10 @@ public class PlayerControler : MonoBehaviour
     [SerializeField] private LayerMask groundLayer;
     [SerializeField] private bool isGrounded;
 
+    [Header("Slow Zones")]
+    [SerializeField] private float currentSpeedMultiplier = 1f; // 1 = normal
+    [SerializeField] private float currentJumpMultiplier  = 1f; // 1 = salto normal
+
     private int direction = 1;
     private int idSpeed;
 
@@ -23,10 +27,10 @@ public class PlayerControler : MonoBehaviour
 
     private void Awake()
     {
-        input = GetComponent<GatherInput>();
-        rb = GetComponent<Rigidbody2D>();
+        input    = GetComponent<GatherInput>();
+        rb       = GetComponent<Rigidbody2D>();
         animator = GetComponent<Animator>();
-        tr = transform;
+        tr       = transform;
 
         if (animator != null)
             idSpeed = Animator.StringToHash("Speed");
@@ -44,20 +48,24 @@ public class PlayerControler : MonoBehaviour
         UpdateAnimator();
     }
 
-    // ================= MOVEMENT =================
+    // ================= MOVIMIENTO =================
     private void Move()
     {
         if (rb == null || input == null) return;
 
         Flip();
 
+        float finalSpeed = speed * currentSpeedMultiplier;
+
         Vector2 vel = rb.linearVelocity;
-        vel.x = input.ValueX * speed;
+        vel.x = finalSpeed * input.ValueX;
         rb.linearVelocity = vel;
     }
 
     private void Flip()
     {
+        if (input == null) return;
+
         if (input.ValueX * direction < 0)
         {
             tr.localScale = new Vector3(
@@ -69,12 +77,20 @@ public class PlayerControler : MonoBehaviour
         }
     }
 
-    // ================= JUMP =================
+    // ================= SALTO =================
     private void Jump()
     {
-        if (input.JumpPressed && isGrounded)
+        if (input == null || rb == null) return;
+
+        if (input.IsJumping && isGrounded)
         {
-            rb.AddForce(Vector2.up * jumpForce, ForceMode2D.Impulse);
+            float finalJumpForce = jumpForce * currentJumpMultiplier;
+
+            Vector2 vel = rb.linearVelocity;
+            vel.y = finalJumpForce;
+            rb.linearVelocity = vel;
+
+            input.IsJumping = false;
         }
     }
 
@@ -83,13 +99,12 @@ public class PlayerControler : MonoBehaviour
     {
         if (lFoot == null || rFoot == null) return;
 
-        RaycastHit2D leftRay = Physics2D.Raycast(lFoot.position, Vector2.down, rayLength, groundLayer);
+        RaycastHit2D leftRay  = Physics2D.Raycast(lFoot.position, Vector2.down, rayLength, groundLayer);
         RaycastHit2D rightRay = Physics2D.Raycast(rFoot.position, Vector2.down, rayLength, groundLayer);
 
         isGrounded = leftRay.collider != null || rightRay.collider != null;
 
-        // Dibujar rayos para depuración
-        Debug.DrawRay(lFoot.position, Vector2.down * rayLength, Color.red);
+        Debug.DrawRay(lFoot.position,  Vector2.down * rayLength, Color.red);
         Debug.DrawRay(rFoot.position, Vector2.down * rayLength, Color.blue);
     }
 
@@ -99,5 +114,30 @@ public class PlayerControler : MonoBehaviour
         if (animator == null || rb == null) return;
 
         animator.SetFloat(idSpeed, Mathf.Abs(rb.linearVelocity.x));
+    }
+
+    // ================= ZONAS RALENTIZADAS =================
+    private void OnTriggerEnter2D(Collider2D other)
+    {
+        ZonaLenta zonaLenta = other.GetComponent<ZonaLenta>();
+        if (zonaLenta != null)
+        {
+            Debug.Log("Entrando en ZonaLenta: " + other.name);
+
+            currentSpeedMultiplier = zonaLenta.speedMultiplier;
+            currentJumpMultiplier  = zonaLenta.jumpMultiplier;
+        }
+    }
+
+    private void OnTriggerExit2D(Collider2D other)
+    {
+        ZonaLenta zonaLenta = other.GetComponent<ZonaLenta>();
+        if (zonaLenta != null)
+        {
+            Debug.Log("Saliendo de ZonaLenta: " + other.name);
+
+            currentSpeedMultiplier = 1f;
+            currentJumpMultiplier  = 1f;
+        }
     }
 }
