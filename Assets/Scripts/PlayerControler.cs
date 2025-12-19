@@ -6,6 +6,10 @@ public class PlayerControler : MonoBehaviour
     [SerializeField] private float speed = 5f;
     [SerializeField] private float jumpForce = 8f;
 
+    [Header("Extra Jumps")]
+    [SerializeField] private int extraJumps = 1;   // nº de saltos extra (1 = doble salto)
+    [SerializeField] private int remainingJumps;    // se rellena en runtime
+
     [Header("Ground Check")]
     [SerializeField] private Transform lFoot;
     [SerializeField] private Transform rFoot;
@@ -34,6 +38,9 @@ public class PlayerControler : MonoBehaviour
 
         if (animator != null)
             idSpeed = Animator.StringToHash("Speed");
+
+        // Al empezar, asumimos que estás en el suelo
+        remainingJumps = extraJumps;
     }
 
     private void FixedUpdate()
@@ -77,12 +84,18 @@ public class PlayerControler : MonoBehaviour
         }
     }
 
-    // ================= SALTO =================
+    // ================= SALTO (con saltos extra) =================
     private void Jump()
     {
         if (input == null || rb == null) return;
 
-        if (input.IsJumping && isGrounded)
+        // Solo hacemos algo si se ha pulsado salto
+        if (!input.IsJumping) return;
+
+        bool canGroundJump = isGrounded;
+        bool canAirJump    = !isGrounded && remainingJumps > 0;
+
+        if (canGroundJump || canAirJump)
         {
             float finalJumpForce = jumpForce * currentJumpMultiplier;
 
@@ -90,8 +103,13 @@ public class PlayerControler : MonoBehaviour
             vel.y = finalJumpForce;
             rb.linearVelocity = vel;
 
-            input.IsJumping = false;
+            // Si es salto en el aire, gastamos uno
+            if (canAirJump)
+                remainingJumps--;
         }
+
+        // consumimos la entrada de salto
+        input.IsJumping = false;
     }
 
     // ================= GROUND CHECK =================
@@ -99,10 +117,18 @@ public class PlayerControler : MonoBehaviour
     {
         if (lFoot == null || rFoot == null) return;
 
+        bool wasGrounded = isGrounded;
+
         RaycastHit2D leftRay  = Physics2D.Raycast(lFoot.position, Vector2.down, rayLength, groundLayer);
         RaycastHit2D rightRay = Physics2D.Raycast(rFoot.position, Vector2.down, rayLength, groundLayer);
 
         isGrounded = leftRay.collider != null || rightRay.collider != null;
+
+        // Solo cuando "aterrizo" reseteo los saltos extra
+        if (isGrounded && !wasGrounded)
+        {
+            remainingJumps = extraJumps;
+        }
 
         Debug.DrawRay(lFoot.position,  Vector2.down * rayLength, Color.red);
         Debug.DrawRay(rFoot.position, Vector2.down * rayLength, Color.blue);
@@ -113,7 +139,8 @@ public class PlayerControler : MonoBehaviour
     {
         if (animator == null || rb == null) return;
 
-        animator.SetFloat(idSpeed, Mathf.Abs(rb.linearVelocity.x));
+        animator.SetFloat("Speed", Mathf.Abs(rb.linearVelocity.x));
+        animator.SetBool("isGrounded", isGrounded);
     }
 
     // ================= ZONAS RALENTIZADAS =================
